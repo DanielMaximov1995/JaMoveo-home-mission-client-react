@@ -1,6 +1,6 @@
 import { ChangeEvent, FormEvent, useState } from "react";
 import Logo from "../logo";
-import { User } from "../../lib/types";
+import { useAuth } from '../../context/AuthContext';
 
 const INSTRUMENTS = [
   'vocals',
@@ -14,11 +14,10 @@ const INSTRUMENTS = [
 
 type RegisterPageProps = {
   navigateTo: (page: string) => void;
-  onRegister: (userData: User) => void;
 }
 
 const RegisterPage = (props: RegisterPageProps) => {
-  const { onRegister, navigateTo } = props;
+  const { navigateTo } = props;
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -26,6 +25,7 @@ const RegisterPage = (props: RegisterPageProps) => {
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { register, user } = useAuth();
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -39,18 +39,15 @@ const RegisterPage = (props: RegisterPageProps) => {
     setError('');
     setIsLoading(true);
     try {
-      const mockUser = {
-        id: Math.floor(Math.random() * 10000),
-        username: formData.username,
-        instrument: formData.instrument,
-        role: 'player'
-      } as User;
-      setTimeout(() => {
-        onRegister(mockUser);
-        setIsLoading(false);
-      }, 1000);
-    } catch (err) {
+      await register(formData.username, formData.password, formData.instrument);
+      if (user && user.isAdmin) {
+        navigateTo('admin');
+      } else {
+        navigateTo('player');
+      }
+    } catch (err: any) {
       setError('Registration error. Please try again.');
+    } finally {
       setIsLoading(false);
     }
   };

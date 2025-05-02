@@ -6,20 +6,18 @@ import PlayerMainPage from './components/player/PlayerMainPage';
 import AdminMainPage from './components/admin/AdminMainPage';
 import LivePage from './components/live/LivePage';
 import { useSocket } from './hooks/useSocket';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
-const App = () => {
+const AppContent = () => {
   const [currentPage, setCurrentPage] = useState('login');
-  const [user, setUser] = useState<User | null>(null);
+  const { user, logout } = useAuth();
   const { currentSong, setCurrentSong, isPlaying, setIsPlaying, socket } = useSocket();
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
-      setCurrentPage(parsedUser.role === 'admin' ? 'admin' : 'player');
+    if (user) {
+      setCurrentPage(user.isAdmin ? 'admin' : 'player');
     }
-  }, [setCurrentSong]);
+  }, [user]);
 
   useEffect(() => {
     if (!socket) return;
@@ -31,7 +29,7 @@ const App = () => {
     socket.on('sessionEnded', () => {
       setCurrentSong(null);
       setIsPlaying(false);
-      setCurrentPage(user?.role === 'admin' ? 'admin' : 'player');
+      setCurrentPage(user?.isAdmin ? 'admin' : 'player');
     });
     return () => {
       socket.off('songSelected');
@@ -43,71 +41,60 @@ const App = () => {
     setCurrentPage(page);
   };
 
-  const handleLogin = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
-    setCurrentPage(userData.role === 'admin' ? 'admin' : 'player');
-  };
-
   const handleLogout = () => {
     if (socket) {
       socket.disconnect();
     }
-    setUser(null);
+    logout();
     setCurrentSong(null);
     setIsPlaying(false);
-    localStorage.removeItem('user');
     navigateTo('login');
   };
 
   const handleSelectSong = (song: SearchResult) => {
-    // In a real application, this would fetch the full song data
-    const mockSong: Song = {
-      id: song.id,
-      title: song.title,
-      artist: song.artist,
-      lyrics: 'Example lyrics...\nLine 1\nLine 2\nLine 3',
-      chords: 'Example chords...\nC G Am F\nC G Am F',
-      imageUrl: song.imageUrl,
-    };
-    setCurrentSong(mockSong);
+    setCurrentSong(song);
     setIsPlaying(true);
-    if (socket) {
-      socket.emit('selectSong', { sessionId: 'current-session', song: mockSong });
-    }
-    navigateTo('live');
-  };
-
-  const handleEndLive = () => {
-    if (socket) {
-      socket.emit('endSession', 'current-session');
-    }
-    setCurrentSong(null);
-    setIsPlaying(false);
-    setCurrentPage(user?.role === 'admin' ? 'admin' : 'player');
-  };
-
-  const renderPage = () => {
-    switch(currentPage) {
-      case 'register':
-        return <RegisterPage onRegister={handleLogin} navigateTo={navigateTo} />;
-      case 'login':
-        return <LoginPage onLogin={handleLogin} navigateTo={navigateTo} />;
-      case 'player':
-        return <PlayerMainPage user={user!} currentSong={currentSong} onLogout={handleLogout} />;
-      case 'admin':
-        return <AdminMainPage user={user!} onSelectSong={handleSelectSong} onLogout={handleLogout} />;
-      case 'live':
-        return <LivePage song={currentSong!} user={user!} onEnd={handleEndLive} />;
-      default:
-        return <LoginPage onLogin={handleLogin} navigateTo={navigateTo} />;
-    }
+    setCurrentPage('live');
   };
 
   return (
-    <div className="min-h-screen bg-jamoveo-dark text-jamoveo-light font-sans">
-      {renderPage()}
+    <div className="min-h-screen bg-gray-100">
+      {currentPage === 'login' && <LoginPage navigateTo={navigateTo} />}
+      {currentPage === 'register' && <RegisterPage navigateTo={navigateTo} />}
+      {currentPage === 'player' && user && (
+        <PlayerMainPage 
+          user={user}
+          currentSong={currentSong}
+          onLogout={handleLogout}
+        />
+      )}
+      {currentPage === 'admin' && user && (
+        <AdminMainPage 
+          user={user}
+          onLogout={handleLogout}
+          onSelectSong={handleSelectSong}
+        />
+      )}
+      {currentPage === 'live' && currentSong && user && (
+        <LivePage
+          song={currentSong}
+          user={user}
+          onEnd={() => {
+            setCurrentPage(user.isAdmin ? 'admin' : 'player');
+            setCurrentSong(null);
+            setIsPlaying(false);
+          }}
+        />
+      )}
     </div>
+  );
+};
+
+const App = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 
